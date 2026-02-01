@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Slender 3D - Adaptive Death Logic</title>
+    <title>Slender 3D - P2P Fixed</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; touch-action: none; }
@@ -17,7 +17,6 @@
         .hidden { display: none !important; }
         #crosshair { position: absolute; top: 50%; left: 50%; color: rgba(255,255,255,0.5); transform: translate(-50%, -50%); z-index: 20; pointer-events: none; font-size: 20px; }
         
-        /* Chat Styles */
         #chat-container { position: absolute; bottom: 20px; left: 20px; width: 300px; z-index: 40; background: rgba(0,0,0,0.5); border-radius: 5px; display: flex; flex-direction: column; }
         #chat-messages { height: 120px; overflow-y: auto; color: white; font-size: 13px; padding: 10px; display: flex; flex-direction: column; border-bottom: 1px solid #333; }
         #chat-input { background: rgba(0,0,0,0.8); border: 1px solid #555; width: calc(100% - 20px); margin: 5px; padding: 5px; color: white; outline: none; }
@@ -79,7 +78,6 @@
     let dirX = 1, dirY = 0, planeX = 0, planeY = 0.66;
     let moveSpeed = 0.07, mouseSensitivity = 0.0025;
 
-    // --- CHAT LOGIC ---
     chatInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && chatInput.value.trim() !== "") {
             const msg = chatInput.value;
@@ -97,7 +95,6 @@
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    // --- CONTROLS ---
     canvas.addEventListener('click', () => { if(!chatInput.matches(':focus')) canvas.requestPointerLock(); });
 
     document.addEventListener('mousemove', (e) => {
@@ -127,7 +124,17 @@
             syncToAll();
         });
         conn.on('data', handleData);
-        conn.on('close', () => { delete connections[conn.peer]; delete players[conn.peer]; });
+        conn.on('close', () => { 
+            addChatMessage("Sistema", "Un jugador se ha desconectado.");
+            delete connections[conn.peer]; 
+            delete players[conn.peer]; 
+            // Si solo queda el host y el juego ya empezó, termina la partida
+            if(Object.keys(players).length <= 1 && gameStarted) {
+                alert("Partida finalizada: No quedan suficientes jugadores.");
+                location.reload();
+            }
+            syncToAll();
+        });
     });
 
     function handleData(data) {
@@ -156,6 +163,11 @@
                 document.getElementById('ui').classList.add('hidden');
             }
             for(let id in data.players) if(id !== myId) players[id] = data.players[id];
+            
+            // Eliminar jugadores que ya no están en el objeto del host
+            for(let id in players) {
+                if(id !== myId && !data.players[id]) delete players[id];
+            }
         }
     }
 
@@ -178,6 +190,10 @@
             }, 30);
         });
         hostConn.on('data', handleData);
+        hostConn.on('close', () => {
+            alert("Conexión con el Host perdida.");
+            location.reload();
+        });
     }
 
     function startGame() {
@@ -233,12 +249,10 @@
             slenderman.y += Math.sin(angle) * 0.02;
 
             if(Math.hypot(posX - slenderman.x, posY - slenderman.y) < 0.4) {
-                // DETECCIÓN DE JUGADORES (ADAPTATIVO)
                 let playerCount = Object.keys(players).length;
-                
                 if(playerCount <= 1) {
                     alert("FIN: Slenderman te atrapó.");
-                    location.reload(); // Reiniciar si es solo uno
+                    location.reload();
                 } else {
                     isDead = true;
                     document.getElementById('ui').classList.remove('hidden');
@@ -338,5 +352,4 @@
     render();
 </script>
 </body>
-
 </html>
