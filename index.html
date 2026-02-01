@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Slender 3D - P2P Fixed</title>
+    <title>Slender 3D - Multi-Cleanup</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; touch-action: none; }
@@ -124,16 +124,19 @@
             syncToAll();
         });
         conn.on('data', handleData);
-        conn.on('close', () => { 
-            addChatMessage("Sistema", "Un jugador se ha desconectado.");
-            delete connections[conn.peer]; 
-            delete players[conn.peer]; 
-            // Si solo queda el host y el juego ya empezó, termina la partida
-            if(Object.keys(players).length <= 1 && gameStarted) {
-                alert("Partida finalizada: No quedan suficientes jugadores.");
+        
+        // LIMPIEZA DE JUGADORES FANTASMA (HOST SIDE)
+        conn.on('close', () => {
+            addChatMessage("Sistema", "Un jugador abandonó.");
+            delete connections[conn.peer];
+            delete players[conn.peer];
+            
+            // Si solo quedas tú, terminar partida (como en una llamada de 2)
+            if (Object.keys(players).length <= 1 && gameStarted) {
+                alert("Partida terminada: No hay más jugadores.");
                 location.reload();
             }
-            syncToAll();
+            syncToAll(); 
         });
     });
 
@@ -162,12 +165,10 @@
                 gameStarted = true;
                 document.getElementById('ui').classList.add('hidden');
             }
-            for(let id in data.players) if(id !== myId) players[id] = data.players[id];
-            
-            // Eliminar jugadores que ya no están en el objeto del host
-            for(let id in players) {
-                if(id !== myId && !data.players[id]) delete players[id];
-            }
+            // Sincronizar lista de jugadores y limpiar los que ya no están en la data recibida
+            let newPlayers = data.players;
+            for(let id in players) { if(id !== myId && !newPlayers[id]) delete players[id]; }
+            for(let id in newPlayers) { if(id !== myId) players[id] = newPlayers[id]; }
         }
     }
 
@@ -190,8 +191,10 @@
             }, 30);
         });
         hostConn.on('data', handleData);
+        
+        // SI EL HOST "CUELGA"
         hostConn.on('close', () => {
-            alert("Conexión con el Host perdida.");
+            alert("Conexión perdida con el Host.");
             location.reload();
         });
     }
@@ -252,7 +255,7 @@
                 let playerCount = Object.keys(players).length;
                 if(playerCount <= 1) {
                     alert("FIN: Slenderman te atrapó.");
-                    location.reload();
+                    location.reload(); 
                 } else {
                     isDead = true;
                     document.getElementById('ui').classList.remove('hidden');
